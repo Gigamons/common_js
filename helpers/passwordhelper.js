@@ -1,15 +1,14 @@
 const bcrypt = require('bcrypt-nodejs');
 
-function check (passhash, hash) {
-    if(bcrypt.compareSync(hash, passhash)) return true;
-    else return false;
+function check(passhash, hash) {
+  return bcrypt.compareSync(hash, passhash);
 }
 
-function create(string){
-    return bcrypt.hashSync(string);
+function create(string) {
+  return bcrypt.hashSync(string);
 }
 
 module.exports = {
-    check: check,
-    create: create
+  check: check,
+  create: create
 };
