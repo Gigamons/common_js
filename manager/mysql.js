@@ -21,7 +21,7 @@ const pool = MySQL.createPool({
     database: config.mysql.database
 });
 
-async function query(sql, param = []) {
+async function query(sql, ...param) {
     return new Promise((resolve, reject) => {
         pool.getConnection((err, con) => {
             if(err) {

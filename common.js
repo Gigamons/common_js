@@ -17,6 +17,7 @@ const countryHelper = require('./helpers/country');
 const ipHelper = require('./helpers/ip');
 const PasswordHelper = require('./helpers/passwordhelper');
 const PrivilegeHelper = require('./helpers/privilege');
+const AccuracyHelper = require('./helpers/accuracy');
 
 // Tools
 const MySQLManager = require('./manager/mysql');
@@ -49,6 +50,7 @@ module.exports = {
     Logger,
     Token,
     PasswordHelper,
+    AccuracyHelper,
     PrivilegeHelper,
     MySQLManager,
     RedisManager,

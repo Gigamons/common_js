@@ -4,107 +4,135 @@ const passhelper = require('../helpers/passwordhelper');
 const logger = require('../helpers/logger');
 const eventtool = require('./event');
 
-async function getuserid(username = 'Pepperony'){
-    let s = username.replace(' ', '_');
-    let safe = s.toLowerCase();
-    let result = await MySQL.query('SELECT id FROM users WHERE username_safe=?', [safe]);
-    if(result){
-        if(result[0])
-            return result[0].id
-        else return false;
-    }
+/**
+ * @param {string} username
+ * @description Returns a UserID from an safe/unsafe username.
+ */
+async function getuserid(username) {
+  let safe = username.replace(new RegExp(" ", "g"), '_').toLowerCase();
+  let result = await MySQL.query('SELECT id FROM users WHERE username_safe = ?', safe);
+  if (result) {
+    if (result[0])
+      return Number(result[0].id)
+    else return 0;
+  }
 }
 
-async function getusername(userid = 0){
-    let result = await MySQL.query('SELECT username, username_safe FROM users WHERE id=?', [userid]);
-    if(result){
-        if(result[0])
-            return {
-                username: result[0]['username'],
-                username_safe: result[0]['username_safe']
-            };
-        else return false;
-    }
-}
-
-async function checkAuth(userid = 0, passhashmd5 = ''){
-    let result = await MySQL.query('SELECT password FROM users WHERE id=?', userid);
-    return passhelper.check(result[0].password, passhashmd5)
-}
-
-async function checkLoggedIn(userid = 0, passhashmd5 = '') {
-    return new Promise(async (resolve, reject) => {
-        const idtouser = await getusername(userid);
-        if(idtouser){
-            redis.hexists('users_loggedin', idtouser.username_safe, async (err, reply) => {
-                if(err) reject(false)
-                else if(Boolean(reply)){
-                    let res = await MySQL.query('SELECT password FROM users WHERE id=?', userid);
-                    resolve(passhelper.check(res[0].password, passhashmd5));
-                } else resolve(false);
-            });
-        } else resolve(false);
-    });
-}
-
-async function getuser(userid = 0){
-    let result = await MySQL.query('SELECT * FROM users WHERE id=? LIMIT 1', userid);
-    let banned = false;
-    return {
-        UserID: Number(result[0].id),
-        UserName: String(result[0].username),
-        UserName_Safe: String(result[0].username_safe),
-        EMail: String(result[0].email),
-        Privileges: Number(result[0].privileges),
-        Banned: {
-            status: Boolean(result[0].banned),
-            reason: String(result[0].ban_reason)
-        },
-        Silenced: {
-            status: Number(result[0].silenced),
-            reason: String(result[0].silence_reason)
-        }
-    }
-}
-
-async function banUser(userid = 0, reason = '') {
-    await MySQL.query('UPDATE users SET banned=?, ban_reason=? WHERE userid=?', [1, reason, userid]);
-    await eventtool.WriteKick(userid, 'Banned!');
-    await eventtool.WriteMessage({
-        from: 'BananaBot',
-        to: '#announce',
-        message: 'User "'+await getusername(userid)+'" got Banned becourse: "'+reason+'"'
-    });
-    return;
-}
-
-async function getLeaderBoard(userid = 0, gamemode = 0, relaxing = false){
-    if(gamemode == 0)
-        gamemode = "std";
-    else if (gamemode == 1)
-        gamemode = "taiko";
-    else if (gamemode == 2)
-        gamemode = "ctb";
-    else if (gamemode == 3)
-        gamemode = "mania";
+/**
+ * @param {number} userid
+ * @description getusername Returns a Object from an UserID username.
+ */
+async function getusername(userid) {
+  let result = await MySQL.query('SELECT username, username_safe FROM users WHERE id = ?', userid);
+  if (result) {
+    if (result[0])
+      return {
+        username: result[0]['username'],
+        username_safe: result[0]['username_safe']
+      };
     else return false;
-    let result;
-    if(relaxing) result = await MySQL.query('SELECT * FROM leaderboard_rx STRAIGHT_JOIN users ON leaderboard_rx.userid = users.id WHERE (users.banned < 1) ORDER BY pp_'+gamemode+' DESC, rankedscore_'+gamemode+' DESC')
-    else result = await MySQL.query('SELECT * FROM leaderboard STRAIGHT_JOIN users ON leaderboard.userid = users.id WHERE (users.banned < 1) ORDER BY pp_'+gamemode+' DESC, rankedscore_'+gamemode+' DESC')
+  }
+}
 
-    for (let i = 0; i < result.length; i++) {
-        const element = result[i];
-        if(element.userid == userid)
-            return [++i, element];
+/**
+ * @param {number} userid
+ * @param {string} passhashmd5
+ * @description Checks if password is Correct
+ * @returns bool
+ */
+async function checkAuth(userid, passhashmd5) {
+  let result = await MySQL.query('SELECT password FROM users WHERE id = ?', userid);
+  return passhelper.check(result[0].password, passhashmd5)
+}
+
+/**
+ * @param {number} userid
+ * @param {string} passhashmd5
+ * @description Checks if user is LoggedIn on Bancho and if password is right
+ * @returns {boolean}
+ */
+async function checkLoggedIn(userid, passhashmd5) {
+  return new Promise(async (resolve, reject) => {
+    let banchotokens = await MySQL.query('SELECT * FROM banchotokens WHERE userid = ?', userid);
+    if (banchotokens[0] != undefined || banchotokens[0] != null) resolve(await checkAuth(userid, passhashmd5))
+    else resolve(false)
+  });
+}
+
+/**
+ * @param {Number} userid
+ * @description returns a UserObject with all Needed userdata.
+ */
+async function getuser(userid) {
+  let result = await MySQL.query('SELECT * FROM users WHERE id = ? LIMIT 1', userid);
+  let result2 = await MySQL.query('SELECT * FROM users_status WHERE id = ? LIMIT 1', userid);
+  return {
+    UserID: Number(result[0].id),
+    UserName: String(result[0].username),
+    UserName_Safe: String(result[0].username_safe),
+    EMail: String(result[0].email),
+    Privileges: Number(result[0].privileges),
+    Banned: {
+      status: Boolean(result2[0].banned),
+      until: result2[0].banned_until,
+      reason: String(result2[0].banned_reason)
+    },
+    Silenced: {
+      status: Number(result2[0].silenced),
+      until: Number(result2[0].silenced_until),
+      reason: String(result2[0].silenced_reason)
     }
+  }
+}
+
+/**
+ * @param {number} userid
+ * @param {string} reason
+ * @description bans a UserID to prevent that the user comes online again
+ */
+async function banUser(userid, reason) {
+  await MySQL.query('UPDATE user_status SET banned = ?, ban_reason = ? WHERE userid = ?', 1, reason, userid);
+  await eventtool.WriteKick(userid, 'Banned!');
+  await eventtool.WriteMessage({
+    from: 'BananaBot',
+    to: '#announce',
+    message: 'User "' + await getusername(userid) + '" got Banned becourse: "' + reason + '"'
+  });
+}
+
+/**
+ * @param {int} userid
+ * @param {int} playmode
+ * @param {bool} relaxing
+ * @description bans a UserID to prevent that the user comes online again
+ */
+async function getLeaderBoard(userid, playmode, relaxing) {
+  if (playmode === 0)
+    playmode = "std";
+  else if (playmode === 1)
+    playmode = "taiko";
+  else if (playmode === 2)
+    playmode = "ctb";
+  else if (playmode === 3)
+    playmode = "mania";
+  else return false;
+  let result;
+  if (relaxing) result = await MySQL.query('SELECT * FROM leaderboard_rx STRAIGHT_JOIN users_status ON leaderboard_rx.id = users_status.id WHERE (users_status.banned < 1) ORDER BY pp_' + playmode + ' DESC, rankedscore_' + playmode + ' DESC')
+  else result = await MySQL.query('SELECT * FROM leaderboard STRAIGHT_JOIN users_status ON leaderboard.id = users_status.id WHERE (users_status.banned < 1) ORDER BY pp_' + playmode + ' DESC, rankedscore_' + playmode + ' DESC')
+  for (let i = 0; i < result.length; i++) {
+    const element = result[i];
+    if (element.id === userid)
+      return [++i, element];
+  }
+  return false;
 }
 
 module.exports = {
-    getuserid,
-    getusername,
-    checkAuth,
-    checkLoggedIn,
-    banUser,
-    getuser,
-    getLeaderBoard
+  getuserid,
+  getusername,
+  checkAuth,
+  checkLoggedIn,
+  banUser,
+  getuser,
+  getLeaderBoard
 };
