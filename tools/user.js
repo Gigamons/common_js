@@ -53,9 +53,7 @@ async function checkAuth(userid, passhashmd5) {
  */
 async function checkLoggedIn(userid, passhashmd5) {
   return new Promise(async (resolve, reject) => {
-    let banchotokens = await MySQL.query('SELECT * FROM banchotokens WHERE userid = ?', userid);
-    if (banchotokens[0] != undefined || banchotokens[0] != null) resolve(await checkAuth(userid, passhashmd5))
-    else resolve(false)
+    resolve(Boolean((await MySQL.query('SELECT * FROM banchotokens WHERE userid = ?', userid))[0]) || Boolean(await checkAuth(userid, passhashmd5)))
   });
 }
 
@@ -91,13 +89,8 @@ async function getuser(userid) {
  * @description bans a UserID to prevent that the user comes online again
  */
 async function banUser(userid, reason) {
-  await MySQL.query('UPDATE user_status SET banned = ?, ban_reason = ? WHERE userid = ?', 1, reason, userid);
+  await MySQL.query('UPDATE users_status SET banned = ?, banned_reason = ? WHERE id = ?', 1, reason, userid);
   await eventtool.WriteKick(userid, 'Banned!');
-  await eventtool.WriteMessage({
-    from: 'BananaBot',
-    to: '#announce',
-    message: 'User "' + await getusername(userid) + '" got Banned becourse: "' + reason + '"'
-  });
 }
 
 /**
