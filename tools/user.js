@@ -64,6 +64,24 @@ async function checkLoggedIn(userid, passhashmd5) {
 async function getuser(userid) {
   let result = await MySQL.query('SELECT * FROM users WHERE id = ? LIMIT 1', userid);
   let result2 = await MySQL.query('SELECT * FROM users_status WHERE id = ? LIMIT 1', userid);
+  if(!result || !result2)
+    return {
+      UserID: 0,
+      UserName: "",
+      UserName_Safe: "",
+      EMail: "",
+      Privileges: 0,
+      Banned: {
+        status: true,
+        until: new Date(),
+        reason: ""
+      },
+      Silenced: {
+        status: true,
+        until:  new Date(),
+        reason: ""
+      }
+    }
   return {
     UserID: Number(result[0].id),
     UserName: String(result[0].username),
